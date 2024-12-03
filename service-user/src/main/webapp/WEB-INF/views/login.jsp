@@ -57,24 +57,6 @@
         .forgot-password:hover {
             text-decoration: underline;
         }
-
-        .home-button {
-            display: block;
-            background-color: #0d47a1;
-            color: white;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            margin: 20px auto;
-            border-radius: 30px;
-            font-size: 18px;
-            width: 150px;
-        }
-
-        .home-button:hover {
-            background-color: #1565c0;
-        }
-
     </style>
 </head>
 
@@ -83,37 +65,71 @@
     <div class="login-container">
         <h2 class="text-center mb-4">Login</h2>
 
-        <form action="/doLogin" method="post">
-            <!-- Email Field -->
+        <form id="loginForm">
             <div class="mb-3">
                 <label for="email" class="form-label">Email address</label>
                 <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email" required>
             </div>
 
-            <!-- Password Field -->
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
                 <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required>
             </div>
 
-            <!-- Submit Button -->
             <div class="d-grid">
                 <button type="submit" class="btn btn-primary">Login</button>
             </div>
 
-            <!-- Forgot Password Link -->
             <div class="mt-3 text-center">
                 <a href="/" class="forgot-password">Home</a>
             </div>
         </form>
+
+        <div id="errorMessage" class="text-danger text-center mt-3" style="display: none;"></div>
     </div>
 
-   
-
-    <!-- Bootstrap JS (optional for responsive behaviors) -->
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
 
-</body>
+    <!-- JavaScript for handling login -->
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
 
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/doLogin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if(data.token) {
+                    	localStorage.setItem("token", data.token);
+                    }
+                    if (data.redirectUrl) {
+                        window.location.href = data.redirectUrl;
+                    }
+                } else if (response.status === 401) {
+                    document.getElementById('errorMessage').textContent = 'Invalid email or password.';
+                    document.getElementById('errorMessage').style.display = 'block';
+                } else {
+                    throw new Error('Something went wrong. Please try again later.');
+                }
+            } catch (error) {
+                console.error(error);
+                document.getElementById('errorMessage').textContent = 'An error occurred. Please try again.';
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        });
+    </script>
+</body>
 </html>

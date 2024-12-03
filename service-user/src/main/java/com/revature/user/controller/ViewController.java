@@ -1,17 +1,21 @@
 package com.revature.user.controller;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.ModelAndView;
+
 import com.revature.user.model.User;
+import com.revature.user.util.JWTService;
 
 import jakarta.servlet.http.HttpSession;
 
@@ -20,6 +24,9 @@ public class ViewController {
 
 	@Autowired
 	RestTemplate restTemplate;
+	
+	@Autowired
+	JWTService jwtService;
 	
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -40,36 +47,49 @@ public class ViewController {
     }
 
     @PostMapping("/doLogin")
-    public ModelAndView doLogin(@RequestParam String email, @RequestParam String password) {
-        // Fetch users from the API
+    public ResponseEntity<?> doLogin(@RequestBody Map<String, String> loginDetails) {
+        String email = loginDetails.get("email");
+        String password = loginDetails.get("password");
+
         RestTemplate restTemplate = new RestTemplate();
-        String apiUrl = "http://localhost:8080/api/users"; // The API URL for fetching users
+        String apiUrl = "http://localhost:8080/api/users"; 
         User[] users = restTemplate.getForObject(apiUrl, User[].class);
 
         if (users != null) {
-            // Check if the user exists and verify the password
-            List<User> userList = Arrays.asList(users);
-            for (User user : userList) {
+            for (User user : users) {
                 if (user.getEmail().equals(email) && passwordEncoder.matches(password, user.getPassword())) {
-                    // Redirect based on user role
-                    User.Role role = user.getRoles().iterator().next(); // Get the first role
+                    User.Role role = user.getRoles().iterator().next();
 
-                    if (role.equals(User.Role.ADMIN)) {
-                        return new ModelAndView("redirect:/adminPage");
-                    } else if (role.equals(User.Role.SELLER)) {
-                        return new ModelAndView("redirect:/sellerPage");
-                    } else if (role.equals(User.Role.BUYER)) {
-                        return new ModelAndView("redirect:/buyerPage");
-                    }
+                    // Generate JWT Token
+                    UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
+                            .username(user.getEmail())
+                            .password(user.getPassword())
+                            .roles(role.name())
+                            .build();
+
+                    String token = jwtService.generateToken(userDetails);
+
+                    String redirectUrl = switch (role) {
+                        case ADMIN -> "/adminPage";
+                        case SELLER -> "/sellerPage";
+                        case BUYER -> "/buyerPage";
+                        default -> "/";
+                    };
+
+                    // Include token and redirectUrl in response
+                    return ResponseEntity.ok(Map.of(
+                            "redirectUrl", redirectUrl,
+                            "token", token
+                    ));
                 }
             }
         }
 
-        // If login fails, redirect back to login page with an error message
-        ModelAndView modelAndView = new ModelAndView("login");
-        modelAndView.addObject("error", "Invalid email or password.");
-        return modelAndView;
+        // Unauthorized response
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid email or password."));
     }
+
+
 
     @GetMapping("/logout")
     public ModelAndView logout(HttpSession session) {
